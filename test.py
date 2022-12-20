@@ -127,7 +127,7 @@ def fn(index, name, size, repeat, warmup, group_size):
   test_fn_map = {"all_reduce": test_all_reduce, "all_gather": test_all_gather}
   test_fn = test_fn_map[name]
 
-  server = xp.start_server(9012)
+  server = xp.start_server(9012, only_on_master=False)
 
   print(f"Testing collective communication op {name} for {repeat} times...")
   avg_time, throughput = test_fn(size, repeat, warmup, group_size)
