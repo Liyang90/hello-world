@@ -80,7 +80,7 @@ def test_all_reduce(size, repeat, warmup, group_size):
   tensor_size = size * 1024 * 256
   world_size = xm.xrt_world_size()
   print(f"world_size: {world_size}")
-  groups = create_groups(world_size, group_size, interleaved=True)
+  groups = create_groups(world_size, group_size, interleaved=False)
   scale = 1 / world_size
   tensor = torch.rand(tensor_size, dtype=torch.float32, device=device)
 
@@ -104,7 +104,7 @@ def test_all_gather(size, repeat, warmup, group_size):
   tensor_size = size * 1024 * 256
   world_size = xm.xrt_world_size()
   print(f"world_size: {world_size}")
-  groups = create_groups(world_size, group_size, interleaved=True)
+  groups = create_groups(world_size, group_size, interleaved=False)
   chunk_size = tensor_size // world_size
   tensor = torch.rand(chunk_size, dtype=torch.float32, device=device)
 
@@ -142,4 +142,4 @@ def fn(index, name, size, repeat, warmup, group_size):
 if __name__ == '__main__':
   args = parse_args()
 
-  xmp.spawn(fn, args=(args.name, args.size, args.repeat, args.warmup, args.group_size), nprocs=8)
+  xmp.spawn(fn, args=(args.name, args.size, args.repeat, args.warmup, args.group_size), nprocs=4)
