@@ -138,6 +138,14 @@ def fn(index, name, size, repeat, warmup, group_size):
   xm.all_reduce(xm.REDUCE_SUM, [tmp_tensor])
   xm.mark_step()
   print(tmp_tensor)
+  
+  xm.rendezvous("end")
+  
+  if pjrt.using_pjrt():
+    device = xm.xla_device()
+    print(pjrt.device_attributes(str(device)), f"local_ordinal: {pjrt.local_ordinal()}", f"global_ordinal: {pjrt.global_ordinal()}")
+
+  xm.rendezvous("end end")
 
 if __name__ == '__main__':
   args = parse_args()
