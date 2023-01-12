@@ -1,4 +1,5 @@
 import argparse
+import json
 import numpy as np
 import socket
 import time
@@ -6,6 +7,7 @@ import torch
 import torch_xla.core.xla_model as xm
 import torch_xla.debug.profiler as xp
 import torch_xla.distributed.xla_multiprocessing as xmp
+from torch_xla.experimental import pjrt
 
 
 def parse_args():
@@ -54,6 +56,13 @@ def parse_args():
       help="Number of times to warmup the test."
   )
 
+  parser.add_argument(
+      "--kwargs",
+      default="{}",
+      type=str,
+      help="JSON string of the kwargs passed to collective comm function.",
+  )
+
   return parser.parse_args()
 
 
@@ -75,7 +84,7 @@ def create_groups(world_size, group_size, interleaved=False):
   return groups
 
 
-def test_all_reduce(size, repeat, warmup, group_size):
+def test_all_reduce(size, repeat, warmup, group_size, **kwargs):
   device = xm.xla_device()
   tensor_size = size * 1024 * 256
   world_size = xm.xrt_world_size()
@@ -86,7 +95,7 @@ def test_all_reduce(size, repeat, warmup, group_size):
 
   times = []
   for _ in range(warmup + repeat):
-    tensor = xm.all_reduce(xm.REDUCE_SUM, tensor, scale=scale, groups=groups)
+    tensor = xm.all_reduce(xm.REDUCE_SUM, tensor, scale=scale, groups=groups, **kwargs)
     t0 = time.time_ns() / (10 ** 9)
     xm.mark_step()
     xm.wait_device_ops()
@@ -99,7 +108,7 @@ def test_all_reduce(size, repeat, warmup, group_size):
   return avg_time, throughput
 
 
-def test_all_gather(size, repeat, warmup, group_size):
+def test_all_gather(size, repeat, warmup, group_size, **kwargs):
   device = xm.xla_device()
   tensor_size = size * 1024 * 256
   world_size = xm.xrt_world_size()
@@ -110,7 +119,7 @@ def test_all_gather(size, repeat, warmup, group_size):
 
   times = []
   for _ in range(warmup + repeat):
-    gathered_tensor = xm.all_gather(tensor, groups=groups)
+    gathered_tensor = xm.all_gather(tensor, groups=groups, **kwargs)
     t0 = time.time_ns() / (10 ** 9)
     xm.mark_step()
     xm.wait_device_ops()
@@ -123,14 +132,17 @@ def test_all_gather(size, repeat, warmup, group_size):
   return avg_time, throughput
 
 
-def fn(index, name, size, repeat, warmup, group_size):
+def fn(index, args):
+  name, size, repeat, warmup, group_size, kwargs = \
+    args.name, args.size, args.repeat, args.warmup, args.group_size, args.kwargs
+  kwargs = json.loads(kwargs)
   test_fn_map = {"all_reduce": test_all_reduce, "all_gather": test_all_gather}
   test_fn = test_fn_map[name]
 
   server = xp.start_server(9012, only_on_master=False)
 
   print(f"Testing collective communication op {name} for {repeat} times...")
-  avg_time, throughput = test_fn(size, repeat, warmup, group_size)
+  avg_time, throughput = test_fn(size, repeat, warmup, group_size, **kwargs)
   print(f"Average time per iteration: {avg_time} seconds.")
   print(f"Through put per process: {throughput} MB/s, or {throughput * 8 / 1024} Gbit/s.")
 
@@ -150,4 +162,4 @@ def fn(index, name, size, repeat, warmup, group_size):
 if __name__ == '__main__':
   args = parse_args()
 
-  xmp.spawn(fn, args=(args.name, args.size, args.repeat, args.warmup, args.group_size), nprocs=4)
+  xmp.spawn(fn, args=(args,), nprocs=4)
