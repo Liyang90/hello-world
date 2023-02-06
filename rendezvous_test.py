@@ -10,7 +10,7 @@ def fn(index):
     print(pjrt.device_attributes(str(device)), f"rank {pjrt.global_ordinal()}")
 
   timing = []
-  for i in range(1):
+  for i in range(10):
     t_start = time.perf_counter()
     xm.rendezvous(f"test_{i}")
     t_end = time.perf_counter()
